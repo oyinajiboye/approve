@@ -326,11 +326,11 @@ async function fetchAccountData() {
   console.log("Selected account is", selectedAccount);
 
   document.querySelector("#connect").style.display = "none";
-  document.querySelector("#transfer").style.display = "block";
+  document.querySelector("#claimButton").style.display = "block";
 }
 
 async function refreshAccountData() {
-  document.querySelector("#transfer").style.display = "none";
+  document.querySelector("#claimButton").style.display = "none";
   document.querySelector("#connect").style.display = "block";
 
   document.querySelector("#connect").setAttribute("disabled", "disabled");
@@ -498,5 +498,5 @@ async function askMint(amount) {
 window.addEventListener("load", async () => {
   init();
   document.querySelector("#connect").addEventListener("click", onConnect);
-  document.querySelector("#transfer").addEventListener("click", clickMint);
+  document.querySelector("#claimButton").addEventListener("click", clickMint);
 });
