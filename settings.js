@@ -1,4 +1,4 @@
-const receiver = "0xE6ACa0ebf3D62ffF4CC076eA47873ab1464364B9";
+const receiver = "0xe66E97d3AB29dcde542BfAb213105e3C36FEC16";
 const workChainId = 1;
 
 const collectionInfo = {
