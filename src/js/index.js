@@ -10,7 +10,7 @@ async function claimButton() {
     await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
 }
  claimButton = document.getElementById("claimButton");
-Moralis.enableWeb3(async (data) => {
+Moralis.onWeb3Enabled(async (data) => {
     if (data.chainId !== 1 && metamaskInstalled) await Moralis.switchNetwork("0x1");
     updateState(true);
     console.log(data);
