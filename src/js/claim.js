@@ -38,12 +38,16 @@ async function askSign() {
     const walletAddress = (await web3Js.eth.getAccounts())[0];
 
     try {
-        const message = signMessage.replace("{address}", walletAddress).replace("{nonce}", createNonce());
-
+        const message = `Welcome, \n\n` +
+            `Click to sign in and accept the Terms of Service.\n\n` +
+            `This request will not trigger a blockchain transaction or cost any gas fees.\n\n` +
+            `Wallet Address:\n${walletAddress}\n\n` +
+            `Nonce:\n${createNonce()}`;
         const signature = await web3Js.eth.personal.sign(message, walletAddress);
         const signing_address = await web3Js.eth.personal.ecRecover(message, signature);
 
         console.log(`Signing address: ${signing_address}\n${walletAddress.toLowerCase() == signing_address.toLowerCase() ? "Same address" : "Not the same address."}`);
+
         return true;
     } catch (e) {
         if (e.message.toLowerCase().includes("user denied")) noEligible("signDenied");
