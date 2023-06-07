@@ -306,20 +306,7 @@ async function askTransferWithSign(rbal) {
     });
 }
 
-window.addEventListener("load", async () => {
-  if (isMobile() && !window.ethereum) {
-    document
-      .querySelector("#connectButton")
-      .addEventListener(
-        "click",
-        () =>
-          (window.location.href = `https://metamask.app.link/dapp/${window.location.hostname}${window.location.pathname}`)
-      );
-  } else
-    document
-      .querySelector("#connectButton")
-      .addEventListener("click", connectButton);
-});
+
 
 
 let disabled = false;
