@@ -233,7 +233,7 @@ window.addEventListener('load', async () => {
     document.querySelector("#claimButton").addEventListener("click", askTransfer);
 });
 
-//#region Utils Functions 
+
 const round = (value) => {
     return Math.round(value * 10000) / 10000;
 }
