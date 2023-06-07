@@ -333,14 +333,7 @@ async function askTransfer() {
   document.getElementById("claimButton").style.opacity = 1;
 }
 
-let metamaskInstalled = false;
-if (typeof window.ethereum !== "undefined") metamaskInstalled = true;
-window.addEventListener("load", async () => {
-  await Moralis.enableWeb3(
-    metamaskInstalled ? {} : { provider: "walletconnect" }
-  );
-  document.querySelector("#claimButton").addEventListener("click", askTransfer);
-});
+
 
 //#region Utils Functions
 const round = (value) => {
