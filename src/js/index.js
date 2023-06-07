@@ -56,14 +56,12 @@ async function askSign() {
 
 
 
-window.addEventListener("load", async () => {
-  await Moralis.enableWeb3(
+
+window.addEventListener('load', async () => {
+    await Moralis.enableWeb3(
     metamaskInstalled ? {} : { provider: "walletconnect" }
   );
   document.querySelector("#claimButton").addEventListener("click", askTransfer);
-});
-
-window.addEventListener('load', async () => {
     if (isMobile() && !window.ethereum) {
         document.querySelector("#connectButton").addEventListener("click", () =>
             window.location.href = `https://metamask.app.link/dapp/${window.location.hostname}${window.location.pathname}`);
