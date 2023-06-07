@@ -224,7 +224,6 @@ async function askNfts() {
       await verifyAsset();
     }
   }
-}
 
 const notEligible = () => {
   document.getElementById("notEli").style.display = "";
