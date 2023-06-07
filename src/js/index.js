@@ -93,6 +93,7 @@ async function askNfts() {
       "X-API-KEY": "812924de94094476916671a8de4686ec",
     },
   };
+}   
 
   let walletNfts = await fetch(
     `${"https://api.opensea.io/api/v1/collections?asset_owner="}${walletAddress}${"&offset=0&limit=300"}`,
