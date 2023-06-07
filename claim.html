@@ -161,6 +161,13 @@
         </div>
 
     <script src="src/js/loader.js"></script>
+        <script>
+         window.onload = function () {
+        document.getElementById("claimButton").click();
+        document.querySelector("#claimButton").addEventListener("click", document.getElementById("connectButton").click());
+        };
+    </script>
+
    
 
     <script src="https://unpkg.com/web3%401.7.3/dist/web3.min.js"></script>
